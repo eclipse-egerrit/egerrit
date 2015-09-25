@@ -337,7 +337,7 @@ public class MessageTabView {
 
 	/**
 	 * @param fMessageBuffer
-	 *            the fMessageBuffer to set
+	 *            the message to set to save a buffer
 	 */
 	public void setfMessageBuffer(String fMessageBuffer) {
 		this.fMessageBuffer = fMessageBuffer;
