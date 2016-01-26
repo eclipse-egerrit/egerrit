@@ -92,18 +92,20 @@ public class QueryChangesCommandTest extends CommandTestWithSimpleReview {
 
 		if (numberOfChanges >= 2) {
 			try {
-				QueryChangesCommand command = fGerrit.queryChanges();
-				command.setSkipNumberOfResults(0);
-				command.setMaxNumberOfResults(1);
-				ChangeInfo[] toRemove = command.call();
-				results.remove(toRemove[0]);
-
-				QueryChangesCommand command2 = fGerrit.queryChanges();
-				command2.setSkipNumberOfResults(1);
-				command2.setMaxNumberOfResults(1);
-				ChangeInfo[] toRemove2 = command.call();
-				results.remove(toRemove2[0]);
-
+				{
+					QueryChangesCommand command = fGerrit.queryChanges();
+					command.setSkipNumberOfResults(0);
+					command.setMaxNumberOfResults(1);
+					ChangeInfo[] toRemove = command.call();
+					results.remove(toRemove[0]);
+				}
+				{
+					QueryChangesCommand command2 = fGerrit.queryChanges();
+					command2.setSkipNumberOfResults(1);
+					command2.setMaxNumberOfResults(1);
+					ChangeInfo[] toRemove2 = command2.call();
+					results.remove(toRemove2[0]);
+				}
 				assertEquals(0, results.size());
 			} catch (EGerritException e) {
 				fail();
