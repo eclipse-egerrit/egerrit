@@ -346,7 +346,8 @@ public class ChangeDetailEditor<ObservableObject> extends EditorPart implements 
 						refreshStatus();
 					} else {
 						String revertMsg = "Revert \"" + fChangeInfo.getSubject() + "\"\n\n" + "This reverts commit "
-								+ fChangeInfo.getCurrent_revision() + ".";
+								+ fChangeInfo.getCurrent_revision() + "\nReview number: " + fChangeInfo.get_number()
+								+ ".";
 						RevertCommand revertCmd = fGerritClient.revert(fChangeInfo.getId());
 						RevertInput revertInput = new RevertInput();
 						revertInput.setMessage(revertMsg);
@@ -763,7 +764,23 @@ public class ChangeDetailEditor<ObservableObject> extends EditorPart implements 
 	 */
 	private void setChangeInfo(GerritClient gerritClient, ChangeInfo element) {
 		fGerritClient = gerritClient;
-		fChangeInfo = element;
+
+		if (fChangeInfo == null) {
+			fChangeInfo = element;
+		} else {
+			//Refresh only potential modified fields, otherwise the data binding seems not to know which fields are modified
+			fChangeInfo.set_number(element.get_number());
+			fChangeInfo.setChange_id(element.getChange_id());
+			fChangeInfo.setStatus(element.getStatus());
+			fChangeInfo.setStarred(element.isStarred());
+			fChangeInfo.setCreated(element.getCreated());
+			fChangeInfo.setUpdated(element.getUpdated());
+			fChangeInfo.setReviewed(element.isReviewed());
+			fChangeInfo.setMergeable(element.isMergeable());
+			fChangeInfo.setInsertions(element.getInsertions());
+			fChangeInfo.setDeletions(element.getDeletions());
+			fChangeInfo.setCurrent_revision(element.getCurrent_revision());
+		}
 	}
 
 	private int findMaxDefinedLabelValue(String label) {
@@ -808,7 +825,7 @@ public class ChangeDetailEditor<ObservableObject> extends EditorPart implements 
 		ChangeInfo changeInfo = QueryHelpers.lookupPartialChangeInfoFromChangeId(fGerritClient, fChangeInfo.getId(),
 				new NullProgressMonitor());
 
-		//Reset the whole window
+		//Reset specific fields, not the whole model structure
 		setChangeInfo(fGerritClient, changeInfo);
 
 		//This query fills the current revision
@@ -1051,10 +1068,9 @@ public class ChangeDetailEditor<ObservableObject> extends EditorPart implements 
 				null);
 
 		//Show status
-		IObservableValue statusFChangeInfoObserveValue = EMFProperties.value(ModelPackage.Literals.CHANGE_INFO__STATUS)
+		IObservableValue statusObserveValue = EMFProperties.value(ModelPackage.Literals.CHANGE_INFO__STATUS)
 				.observe(fChangeInfo);
-		bindingContext.bindValue(WidgetProperties.text().observe(statusData), statusFChangeInfoObserveValue, null,
-				null);
+		bindingContext.bindValue(WidgetProperties.text().observe(statusData), statusObserveValue, null, null);
 
 		return bindingContext;
 	}
