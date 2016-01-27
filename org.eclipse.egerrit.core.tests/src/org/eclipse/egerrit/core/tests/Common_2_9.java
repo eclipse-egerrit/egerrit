@@ -26,7 +26,7 @@ public class Common_2_9 extends Common {
 
 	public static final int PORT = 28294;
 
-	public static final String PATH = "";
+	public static final String PATH = "/gerrit-2.9.4";
 
 	public static final String GERRIT_VERSION = "2.9.4";
 }

@@ -1,0 +1,59 @@
+Vagrant.configure("2") do |config|
+
+#Select the box to configure
+  config.vm.define :"EGerrit"
+#  config.vm.box = "JacquesBouthillier/EGerrit"
+#  config.vm.box_url = "https://atlas.hashicorp.com/JacquesBouthillier/EGerrit"
+#  config.vm.box_url = "https://vagrantcloud.com/JacquesBouthillier/boxes/EGerrit"
+
+  config.vm.box = "EGerrit-Repositories"
+  config.vm.box_url = "http://files.vagrantup.com/precise32.box"
+#  config.vm.box = "precise32"
+#  config.vm.box_url = "http://files.vagrantup.com/precise32.box"
+#  config.vm.box = "precise64"
+#  config.vm.box_url = "http://files.vagrantup.com/precise64.box"
+
+   config.vm.network "private_network", ip: "192.168.50.4"
+
+  config.vm.network "forwarded_port", guest:  80, host: 2080
+  config.vm.network "forwarded_port", guest: 443, host: 2443
+
+  config.vm.box_download_insecure = true
+
+
+  config.vm.provider "virtualbox" do |v|
+    v.name = "EGerrit-Repositories"
+    v.customize ["modifyvm", :id, "--memory", 2048]
+    v.customize ["modifyvm", :id, "--cpus", 2]
+  end
+
+#Adjust the proxy if needed
+  puts "proxyconf..."
+  if Vagrant.has_plugin?("vagrant-proxyconf")
+    envset = "false"
+    puts "find proxyconf plugin !"
+    if ENV["http_proxy"]
+      puts "http_proxy: " + ENV["http_proxy"]
+      config.proxy.http     = ENV["http_proxy"]
+      envset = "true"
+    end
+    if ENV["https_proxy"]
+      puts "https_proxy: " + ENV["https_proxy"]
+      config.proxy.https    = ENV["https_proxy"]
+      envset = "true"
+    end
+    if ENV["no_proxy"]
+      puts "no_proxy: " + ENV["no_proxy"]
+      config.proxy.no_proxy = ENV["no_proxy"]
+      envset = "true"
+    end
+    puts "environment set: %s" %[ envset]
+    if envset == "false"
+      puts "Proxy not set in your environment, unable to continue"
+      exit
+    end
+  end
+
+#Configure the environment
+  config.vm.provision :puppet, :module_path => "modules"
+end
