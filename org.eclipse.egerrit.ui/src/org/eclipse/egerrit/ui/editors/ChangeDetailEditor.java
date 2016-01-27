@@ -162,8 +162,6 @@ public class ChangeDetailEditor<ObservableObject> extends EditorPart implements 
 
 	private Text shortIdData;
 
-//	private StyledText msgAuthorData;
-
 	private Button fSubmitRevert;
 
 	private Button fAbandonRestore;
@@ -178,7 +176,7 @@ public class ChangeDetailEditor<ObservableObject> extends EditorPart implements 
 
 	private boolean fAbandonMode = false;
 
-	private boolean fSubmitMode = false;
+	private boolean fSubmitMode = true;
 
 	private Button fDraftPublishDelete;
 
@@ -866,14 +864,19 @@ public class ChangeDetailEditor<ObservableObject> extends EditorPart implements 
 
 		if (canSubmit()) {
 			fSubmitRevert.setEnabled(true);
-			fSubmitRevert.setText("Submit");
 			fSubmitMode = true;
 		} else if (canRevert()) {
 			fSubmitRevert.setEnabled(true);
-			fSubmitRevert.setText("Revert");
 			fSubmitMode = false;
 		} else {
 			fSubmitRevert.setEnabled(false);
+		}
+
+		//Adjust the text on the button
+		if (fSubmitMode) {
+			fSubmitRevert.setText("Submit");
+		} else {
+			fSubmitRevert.setText("Revert");
 		}
 
 	}
