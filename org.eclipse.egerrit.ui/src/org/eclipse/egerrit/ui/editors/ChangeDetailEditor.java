@@ -70,6 +70,7 @@ import org.eclipse.egerrit.internal.model.ChangeInfo;
 import org.eclipse.egerrit.internal.model.LabelInfo;
 import org.eclipse.egerrit.internal.model.ModelPackage;
 import org.eclipse.egerrit.internal.model.RevisionInfo;
+import org.eclipse.egerrit.ui.EGerritUIPlugin;
 import org.eclipse.egerrit.ui.editors.model.ChangeDetailEditorInput;
 import org.eclipse.egerrit.ui.internal.tabs.FilesTabView;
 import org.eclipse.egerrit.ui.internal.tabs.HistoryTabView;
@@ -114,6 +115,7 @@ import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorSite;
 import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchPage;
+import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PartInitException;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.commands.ICommandService;
@@ -342,6 +344,8 @@ public class ChangeDetailEditor<ObservableObject> extends EditorPart implements 
 						}
 						fSubmitMode = false;
 						refreshStatus();
+						//Initialize the files tab with the latest patch-set
+						filesTab.setInitPatchSet();
 					} else {
 						String revertMsg = "Revert \"" + fChangeInfo.getSubject() + "\"\n\n" + "This reverts commit "
 								+ fChangeInfo.getCurrent_revision() + "\nReview number: " + fChangeInfo.get_number()
@@ -359,12 +363,7 @@ public class ChangeDetailEditor<ObservableObject> extends EditorPart implements 
 							EGerritCorePlugin
 									.logError(fGerritClient.getRepository().formatGerritVersion() + e3.getMessage());
 						}
-						fChangeInfo.setId(revertResult.getId());
-
-						fSubmitMode = true;
-						refreshStatus();
-						setEditorTitle();
-
+						openAnotherEditor(revertResult);
 					}
 				}
 			});
@@ -742,6 +741,7 @@ public class ChangeDetailEditor<ObservableObject> extends EditorPart implements 
 		try {
 			reviewToEmit.call();
 			refreshStatus();
+			filesTab.setInitPatchSet();
 		} catch (EGerritException e1) {
 			EGerritCorePlugin.logError(fGerritClient.getRepository().formatGerritVersion() + e1.getMessage());
 		}
@@ -1233,4 +1233,34 @@ public class ChangeDetailEditor<ObservableObject> extends EditorPart implements 
 
 		}
 	}
+
+	/**
+	 * Open another editor after a revert action with the newest changeInfo
+	 *
+	 * @param changeInfo
+	 */
+	private void openAnotherEditor(ChangeInfo changeInfo) {
+		IWorkbench workbench = EGerritUIPlugin.getDefault().getWorkbench();
+		IWorkbenchWindow window = workbench.getActiveWorkbenchWindow();
+		IWorkbenchPage page = null;
+		if (window != null) {
+			page = workbench.getActiveWorkbenchWindow().getActivePage();
+		}
+
+		if (page != null) {
+			try {
+				IEditorInput input = new ChangeDetailEditorInput(fGerritClient, changeInfo);
+				IEditorPart reusedEditor = page.findEditor(input);
+				page.openEditor(input, ChangeDetailEditor.EDITOR_ID);
+				if (reusedEditor instanceof ChangeDetailEditor) {
+					((ChangeDetailEditor) reusedEditor).refreshStatus();
+				}
+			} catch (PartInitException e) {
+				EGerritCorePlugin.logError(fGerritClient != null
+						? fGerritClient.getRepository().formatGerritVersion() + e.getMessage()
+						: e.getMessage());
+			}
+		}
+	}
+
 }
