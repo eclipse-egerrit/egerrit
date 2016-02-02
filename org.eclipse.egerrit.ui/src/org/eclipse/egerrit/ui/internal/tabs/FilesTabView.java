@@ -887,6 +887,19 @@ public class FilesTabView extends Observable implements PropertyChangeListener {
 	}
 
 	/**
+	 * @return the patchset selection number as an int
+	 */
+	public int getSelectedPatchSetNumber() {
+		RevisionInfo psSelectedRev = null;
+		ISelection selected = comboPatchsetViewer.getSelection();
+		if (!selected.isEmpty()) {
+			psSelectedRev = findSelectedPatchsetRevision(selected);
+			return psSelectedRev.get_number();
+		}
+		return -1;
+	}
+
+	/**
 	 * Initialize the combo patch set viewer with the latest patch set
 	 */
 	public void setInitPatchSet() {

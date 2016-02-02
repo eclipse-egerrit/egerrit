@@ -21,12 +21,14 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Observable;
 import java.util.Observer;
+import java.util.Set;
 
 import org.eclipse.core.commands.Command;
 import org.eclipse.core.commands.ExecutionEvent;
@@ -41,6 +43,7 @@ import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.core.runtime.Status;
+import org.eclipse.core.runtime.preferences.ConfigurationScope;
 import org.eclipse.egerrit.core.EGerritCorePlugin;
 import org.eclipse.egerrit.core.GerritClient;
 import org.eclipse.egerrit.core.command.AbandonCommand;
@@ -78,6 +81,7 @@ import org.eclipse.egerrit.ui.internal.tabs.MessageTabView;
 import org.eclipse.egerrit.ui.internal.tabs.SummaryTabView;
 import org.eclipse.egerrit.ui.internal.utils.GerritToGitMapping;
 import org.eclipse.egerrit.ui.internal.utils.LinkDashboard;
+import org.eclipse.egit.ui.internal.dialogs.CheckoutConflictDialog;
 import org.eclipse.egit.ui.internal.fetch.FetchGerritChangeWizard;
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.common.util.EMap;
@@ -87,8 +91,14 @@ import org.eclipse.jface.dialogs.ErrorDialog;
 import org.eclipse.jface.dialogs.IDialogConstants;
 import org.eclipse.jface.dialogs.InputDialog;
 import org.eclipse.jface.dialogs.MessageDialog;
+import org.eclipse.jface.dialogs.MessageDialogWithToggle;
 import org.eclipse.jface.window.Window;
 import org.eclipse.jface.wizard.WizardDialog;
+import org.eclipse.jgit.api.CheckoutCommand;
+import org.eclipse.jgit.api.CheckoutResult;
+import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.transport.URIish;
 import org.eclipse.swt.SWT;
@@ -121,6 +131,8 @@ import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.commands.ICommandService;
 import org.eclipse.ui.part.EditorPart;
 import org.eclipse.ui.services.IServiceLocator;
+import org.osgi.service.prefs.BackingStoreException;
+import org.osgi.service.prefs.Preferences;
 
 import com.ibm.icu.text.NumberFormat;
 
@@ -1125,7 +1137,6 @@ public class ChangeDetailEditor<ObservableObject> extends EditorPart implements 
 		return new SelectionAdapter() {
 			@Override
 			public void widgetSelected(SelectionEvent event) {
-
 				Repository localRepo = findLocalRepo(fGerritClient, summaryTab.getProject());
 
 				if (localRepo == null) {
@@ -1141,12 +1152,137 @@ public class ChangeDetailEditor<ObservableObject> extends EditorPart implements 
 				}
 
 				//Find the current selected Patch set reference in the table
-				WizardDialog w = new WizardDialog(parent.getShell(),
-						new FetchGerritChangeWizard(localRepo, psSelected));
-				w.open();
+				FetchGerritChangeWizard var = new FetchGerritChangeWizard(localRepo, psSelected);
+				WizardDialog w = new WizardDialog(parent.getShell(), var);
+				String currentActiveBranchName = getCurrentBranchName(localRepo);
+				w.create();
+				String dialogErrorMsg = w.getErrorMessage();
+				String existingLocalBranchName = getTargetBranchName(parent, localRepo);
+				// already on the branch, nothing to do
+				if (existingLocalBranchName != null
+						&& currentActiveBranchName.compareTo(existingLocalBranchName) == 0) {
+					return;
+				}
+				// the target branch exists
+				if (dialogErrorMsg != null && dialogErrorMsg.contains("already exists")) { // branch already exists,
+
+					int result = checkOutOrNot(existingLocalBranchName);
+					if (result == 256) {
+						w.open();
+						return;
+					} else if (result == Window.CANCEL) { // cancel
+						return;
+					}
+
+					try {
+						checkoutBranch(existingLocalBranchName, localRepo);
+					} catch (Exception e) {
+					}
+				} else {
+					// no branch yet, go through wizard
+					try {
+						w.open();
+
+					} catch (Exception e) {
+					}
+				}
 			}
+
 		};
 
+	}
+
+	private String getCurrentBranchName(Repository localRepo) {
+		String head = null;
+		try {
+			head = localRepo.getFullBranch();
+		} catch (IOException e1) {
+
+		}
+		if (head.startsWith("refs/heads/")) { // Print branch name with "refs/heads/" stripped.
+			try {
+				return localRepo.getBranch();
+			} catch (IOException e) {
+			}
+
+		}
+		return head;
+	}
+
+	private String getTargetBranchName(final Composite parent, Repository localRepo) {
+		Set<String> branches = null;
+		try {
+			branches = getShortLocalBranchNames(new Git(localRepo));
+		} catch (GitAPIException e1) {
+			Status status = new Status(IStatus.ERROR, EGerritCorePlugin.PLUGIN_ID, "No branches found");
+			ErrorDialog.openError(parent.getShell(), "Error", "Operation could not be performed", status);
+			return "";
+		}
+		String shortName = fChangeInfo.get_number() + "/" + filesTab.getSelectedPatchSetNumber();
+		Iterator<String> iterator = branches.iterator();
+		String branchName = null;
+		while (iterator.hasNext()) {
+			String setElement = iterator.next();
+			if (setElement.contains(shortName)) {
+				branchName = setElement;
+				break;
+			}
+		}
+		return branchName;
+	}
+
+	private int checkOutOrNot(String branchName) {
+		Preferences prefs = ConfigurationScope.INSTANCE.getNode("org.eclipse.egerrit.prefs");
+
+		Preferences editorPrefs = prefs.node("checkout");
+
+		int choice = editorPrefs.getInt("doCheckout", 0);
+
+		if (choice != 0) {
+			return choice;
+		}
+		String title = "Review previously checked-out";
+		String message = "Change \"" + fChangeInfo.getSubject() + "\"" + " has previously been checked out in branch "
+				+ "\"" + branchName + "\"" + ".\n\n" + "Do you want to switch to it or create a new branch?";
+		MessageDialogWithToggle dialog = new MessageDialogWithToggle(fDraftPublishDelete.getParent().getShell(), title,
+				null, message, MessageDialog.NONE, new String[] { "Cancel", "New Branch", "Switch" }, 0,
+				"Always perform this action", false);
+		dialog.open();
+		int result = dialog.getReturnCode();
+
+		if (result != Window.CANCEL && dialog.getToggleState()) {
+			editorPrefs.putInt("doCheckout", result);
+			try {
+				editorPrefs.flush();
+			} catch (BackingStoreException e) {
+				//There is not much we can do
+			}
+		}
+		return result;
+	}
+
+	private static Set<String> getShortLocalBranchNames(Git git) throws GitAPIException {
+		Set<String> branches = new HashSet<String>();
+		Iterator<Ref> iter = git.branchList().call().iterator();
+		while (iter.hasNext()) {
+			branches.add(Repository.shortenRefName(iter.next().getName()));
+		}
+		return branches;
+	}
+
+	private void checkoutBranch(String branchName, Repository repo) throws Exception {
+		CheckoutCommand command = null;
+		try {
+			command = new Git(repo).checkout();
+			command.setCreateBranch(false);
+			command.setName(branchName);
+			command.setForce(false);
+			command.call();
+		} catch (Throwable t) {
+			CheckoutResult result = command.getResult();
+			new CheckoutConflictDialog(fDraftPublishDelete.getParent().getShell(), repo, result.getConflictList())
+					.open();
+		}
 	}
 
 	/*********************************************/
