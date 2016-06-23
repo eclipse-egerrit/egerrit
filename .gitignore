@@ -4,4 +4,3 @@ target/
 */.settings/org.sonar.ide.eclipse.core.prefs
 */.vagrant/*
 jacoco/
-src-gen
